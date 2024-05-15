@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consumption Table Generator</title>
+    <style>
+        table {
+            width: 60%;
+            border-collapse: collapse;
+            border: 2px solid #000;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #000;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        form {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        label {
+            margin-bottom: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+<form id="inputForm">
+    <label for="utilityType">Utility Type:</label>
+    <select id="utilityType" name="utilityType" required>
+        <option value="electricity">Electricity</option>
+        <option value="gas">Gas</option>
+    </select>
+    <label for="startDate">Start Date:</label>
+    <input type="month" id="startDate" name="startDate" required>
+    <label for="endDate">End Date:</label>
+    <input type="month" id="endDate" name="endDate" required>
+    <label for="consumptionValues">Enter Consumption Values (one per line):</label>
+    <textarea id="consumptionValues" name="consumptionValues" rows="6" required></textarea>
+    <label for="percentage">Enter Percentage:</label>
+    <input type="number" id="percentage" name="percentage" min="0" max="100" step="0.01" value="100" required>%
+    <button type="submit">Generate Table</button>
+</form>
+
+<table id="dataTable">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Consumption kWh</th>
+            <th>CCL rate £/kWh</th>
+            <th>CCL claim (£)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Table rows will be dynamically added here -->
+    </tbody>
+    <tfoot>
+        <tr>
+            <th>Total:</th>
+            <th id="totalConsumption"></th>
+            <th></th>
+            <th id="totalCCLClaim"></th>
+        </tr>
+    </tfoot>
+</table>
+
+<script>
+    document.getElementById('inputForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        
+        var utilityType = document.getElementById('utilityType').value;
+        var startDateInput = document.getElementById('startDate').value;
+        var endDateInput = document.getElementById('endDate').value;
+        var consumptionValuesInput = document.getElementById('consumptionValues').value.trim().split('\n');
+        var percentage = parseFloat(document.getElementById('percentage').value) / 100;
+        
+        var startDate = new Date(startDateInput);
+        var endDate = new Date(endDateInput);
+
+        var tableBody = document.querySelector('#dataTable tbody');
+        tableBody.innerHTML = '';
+        
+        var currentDate = new Date(startDate);
+        var index = 0;
+
+        var totalConsumption = 0;
+        var totalCCLClaim = 0;
+
+        while (currentDate <= endDate) {
+            var formattedDate = formatDate(currentDate);
+            var consumption = parseFloat(consumptionValuesInput[index].replace(/,/g, '')) || 0;
+            var cclRate = getCCLRate(utilityType, consumption, currentDate);
+            var cclClaim = (consumption * cclRate * percentage).toFixed(2);
+            
+            var row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${formattedDate}</td>
+                <td>${consumption}</td>
+                <td>£${cclRate.toFixed(5)}</td>
+                <td>£${cclClaim}</td>
+            `;
+            tableBody.appendChild(row);
+            
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            index++;
+
+            totalConsumption += consumption;
+            totalCCLClaim += parseFloat(cclClaim);
+        }
+
+        document.getElementById('totalConsumption').textContent = totalConsumption.toFixed(2);
+        document.getElementById('totalCCLClaim').textContent = '£' + totalCCLClaim.toFixed(2);
+    });
+
+    function formatDate(date) {
+        var monthNames = ["January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+        var month = date.getMonth();
+        var year = date.getFullYear().toString().slice(-2);
+        return monthNames[month] + '-' + year;
+    }
+
+    function getCCLRate(utilityType, consumption, date) {
+        var year = date.getFullYear();
+        var month = date.getMonth();
+
+        if (utilityType === 'gas' && consumption < 4398) {
+            return 0;
+        } else if (utilityType === 'electricity' && consumption < 1000) {
+            return 0;
+        }
+
+        if (utilityType === 'gas') {
+            if ((year === 2016 && month >= 3) || (year === 2017 && month < 3)) {
+                return 0.00195;
+            } else if ((year === 2017 && month >= 3) || (year === 2018 && month < 3)) {
+                return 0.00198;
+            } else if ((year === 2018 && month >= 3) || (year === 2019 && month < 3)) {
+                return 0.00203;
+            } else if ((year === 2019 && month >= 3) || (year === 2020 && month < 3)) {
+                return 0.00339;
+            } else if ((year === 2020 && month >= 3) || (year === 2021 && month < 3)) {
+                return 0.00406;
+            } else if ((year === 2021 && month >= 3) || (year === 2022 && month < 3)) {
+                return 0.00465;
+            } else if ((year === 2022 && month >= 3) || (year === 2023 && month < 3)) {
+                return 0.00568;
+            } else {
+                return 0.00672; // From Apr-23 onward
+            }
+        } else { // Electricity
+            if ((year === 2016 && month >= 3) || (year === 2017 && month < 3)) {
+                return 0.00559;
+            } else if ((year === 2017 && month >= 3) || (year === 2018 && month < 3)) {
+                return 0.00568;
+            } else if ((year === 2018 && month >= 3) || (year === 2019 && month < 3)) {
+                return 0.00583;
+            } else if ((year === 2019 && month >= 3) || (year === 2020 && month < 3)) {
+                return 0.00847;
+            } else if ((year === 2020 && month >= 3) || (year === 2021 && month < 3)) {
+                return 0.00811;
+            } else if ((year === 2021 && month >= 3) || (year === 2022 && month < 3)) {
+                return 0.00775;
+            } else {
+                return 0.00775; // From Apr-23 onward
+            }
+        }
+    }
+</script>
+
+</body>
+</html>
